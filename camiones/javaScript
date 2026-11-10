@@ -1,0 +1,1047 @@
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+
+const $ = id => document.getElementById(id);
+const view = $("threeView");
+
+let scene, camera, renderer, controls, truckRoot;
+let partGroups = new Map();
+let exploded = false;
+let selectedPart = null;
+
+const partDefinitions = [];
+
+const presets = {
+  cargo: [850, 250, 330],
+  tractor: [1600, 250, 390],
+  dump: [750, 250, 320],
+  tanker: [950, 250, 340],
+  fire: [900, 250, 340],
+  crane: [900, 250, 350]
+};
+
+const fmt = n => Number(n).toLocaleString("es-CO", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
+
+const mat = (color, roughness = .72, metalness = .05) =>
+  new THREE.MeshStandardMaterial({
+    color,
+    roughness,
+    metalness
+  });
+
+const materials = {
+  blue: mat("#1769aa"),
+  blueDark: mat("#10416e"),
+  glass: mat("#8bc8e8", .25, .1),
+  black: mat("#171d26"),
+  rubber: mat("#17191d"),
+  metal: mat("#8996a5", .35, .65),
+  silver: mat("#c4d0dc", .3, .7),
+  white: mat("#e7edf3"),
+  red: mat("#c83b36"),
+  yellow: mat("#f5c542"),
+  seat: mat("#303d50"),
+  wood: mat("#a97845")
+};
+
+// INICIAR ESCENA 3D
+
+function init3D() {
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color("#0b1a2d");
+
+  camera = new THREE.PerspectiveCamera(
+    42,
+    view.clientWidth / view.clientHeight,
+    .1,
+    1000
+  );
+
+  camera.position.set(10, 8, 12);
+
+  renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    alpha: false
+  });
+
+  renderer.setPixelRatio(
+    Math.min(window.devicePixelRatio, 2)
+  );
+
+  renderer.setSize(
+    view.clientWidth,
+    view.clientHeight
+  );
+
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+  view.prepend(renderer.domElement);
+
+  controls = new OrbitControls(
+    camera,
+    renderer.domElement
+  );
+
+  controls.enableDamping = true;
+  controls.target.set(0, 1.5, 0);
+  controls.maxPolarAngle = Math.PI * .49;
+
+  scene.add(
+    new THREE.HemisphereLight(
+      0xb9d8f5,
+      0x27364b,
+      2.1
+    )
+  );
+
+  const key = new THREE.DirectionalLight(
+    0xffffff,
+    2.4
+  );
+
+  key.position.set(7, 12, 8);
+  key.castShadow = true;
+  scene.add(key);
+
+  const fill = new THREE.DirectionalLight(
+    0x5caeff,
+    1.1
+  );
+
+  fill.position.set(-8, 5, -6);
+  scene.add(fill);
+
+  const floor = new THREE.Mesh(
+    new THREE.PlaneGeometry(200, 200),
+    mat("#14283f")
+  );
+
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.y = -.04;
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  const grid = new THREE.GridHelper(
+    30,
+    30,
+    "#34516f",
+    "#1e3854"
+  );
+
+  grid.position.y = -.025;
+  scene.add(grid);
+
+  buildTruck();
+
+  $("loading").style.display = "none";
+
+  window.addEventListener("resize", onResize);
+
+  animate();
+}
+
+// AJUSTAR PANTALLA
+
+function onResize() {
+  if (!renderer) return;
+
+  camera.aspect =
+    view.clientWidth / view.clientHeight;
+
+  camera.updateProjectionMatrix();
+
+  renderer.setSize(
+    view.clientWidth,
+    view.clientHeight
+  );
+}
+
+// ANIMACIÓN
+
+function animate() {
+  requestAnimationFrame(animate);
+
+  for (const [key, group] of partGroups) {
+    const target = exploded
+      ? group.userData.exploded
+      : group.userData.home;
+
+    group.position.lerp(target, .09);
+  }
+
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+// CREAR PIEZAS RECTANGULARES
+
+function addBox(parent, name, dim, pos, material, groupKey = name) {
+  const g = partGroups.get(groupKey);
+
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(...dim),
+    material
+  );
+
+  mesh.position.set(...pos);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  mesh.userData.partKey = groupKey;
+
+  g.add(mesh);
+
+  return mesh;
+}
+
+// CREAR GRUPOS DE PIEZAS
+
+function makeGroup(
+  key,
+  description,
+  measurement,
+  quantity,
+  material,
+  home,
+  explode
+) {
+  const group = new THREE.Group();
+
+  group.name = key;
+
+  group.userData = {
+    home: new THREE.Vector3(...home),
+    exploded: new THREE.Vector3(...explode),
+    description,
+    measurement,
+    quantity,
+    material
+  };
+
+  group.position.copy(group.userData.home);
+
+  truckRoot.add(group);
+  partGroups.set(key, group);
+
+  partDefinitions.push({
+    key,
+    name: key,
+    description,
+    measurement,
+    quantity,
+    material
+  });
+
+  return group;
+}
+
+// CONSTRUIR CAMIÓN 3D
+
+function buildTruck() {
+  if (truckRoot) {
+    scene.remove(truckRoot);
+
+    truckRoot.traverse(o => {
+      if (o.geometry) o.geometry.dispose();
+    });
+  }
+
+  partGroups = new Map();
+  partDefinitions.length = 0;
+
+  truckRoot = new THREE.Group();
+  scene.add(truckRoot);
+
+  const s = Number($("scale").value);
+
+  const L = Number($("realLength").value) / s / 10;
+  const W = Number($("realWidth").value) / s / 10;
+  const H = Number($("realHeight").value) / s / 10;
+
+  const t = Math.max(
+    .035,
+    Number($("woodThickness").value) / 1000 * s
+  );
+
+  const len = Math.max(5, L);
+  const wid = Math.max(2, W);
+  const hei = Math.max(2.4, H);
+
+  const cabLen = len * .23;
+  const boxLen = len - cabLen * .95;
+  const wheelR = hei * .105;
+
+  const zFront = len / 2 - cabLen / 2;
+  const zBox = -cabLen * .42;
+
+  const yBase = wheelR * 1.7;
+
+  const boxHeight = hei * .43;
+  const cabHeight = hei * .70;
+
+  // CHASIS
+
+  makeGroup(
+    "Chasis",
+    "Estructura inferior que sostiene la cabina, carrocería y ejes.",
+    `${fmt(len)} × ${fmt(wid * .13)} × ${fmt(t)}`,
+    1,
+    "Madera / listón",
+    [0, 0, 0],
+    [0, -.6, 0]
+  );
+
+  const chassis = partGroups.get("Chasis");
+
+  addBox(
+    chassis,
+    "larguero",
+    [wid * .10, t, len * .94],
+    [-wid * .36, yBase, 0],
+    materials.metal,
+    "Chasis"
+  );
+
+  addBox(
+    chassis,
+    "larguero",
+    [wid * .10, t, len * .94],
+    [wid * .36, yBase, 0],
+    materials.metal,
+    "Chasis"
+  );
+
+  for (let i = 0; i < 4; i++) {
+    addBox(
+      chassis,
+      "travesaño",
+      [wid * .82, t * 1.1, wid * .07],
+      [0, yBase, -len * .40 + i * len * .27],
+      materials.metal,
+      "Chasis"
+    );
+  }
+
+  // CABINA
+
+  makeGroup(
+    "Cabina",
+    "Conjunto exterior de la cabina. Añade después los detalles interiores.",
+    `${fmt(cabLen * 10)} × ${fmt(wid * 10)} × ${fmt(cabHeight * 10)} cm`,
+    1,
+    "Madera / contrachapado",
+    [0, 0, 0],
+    [0, .55, len * .12]
+  );
+
+  const cab = partGroups.get("Cabina");
+  const cabZ = zFront;
+
+  addBox(
+    cab,
+    "piso",
+    [wid * .92, t, cabLen * .95],
+    [0, yBase + cabHeight * .03, cabZ],
+    materials.blueDark,
+    "Cabina"
+  );
+
+  addBox(
+    cab,
+    "frente",
+    [wid * .92, cabHeight * .63, t],
+    [0, yBase + cabHeight * .38, cabZ + cabLen * .46],
+    materials.blue,
+    "Cabina"
+  );
+
+  addBox(
+    cab,
+    "techo",
+    [wid * .92, t, cabLen * .94],
+    [0, yBase + cabHeight * .72, cabZ],
+    materials.blue,
+    "Cabina"
+  );
+
+  addBox(
+    cab,
+    "pared trasera",
+    [wid * .92, cabHeight * .7, t],
+    [0, yBase + cabHeight * .37, cabZ - cabLen * .46],
+    materials.blueDark,
+    "Cabina"
+  );
+
+  addBox(
+    cab,
+    "lateral izq",
+    [t, cabHeight * .7, cabLen * .9],
+    [-wid * .46, yBase + cabHeight * .37, cabZ],
+    materials.blue,
+    "Cabina"
+  );
+
+  addBox(
+    cab,
+    "lateral der",
+    [t, cabHeight * .7, cabLen * .9],
+    [wid * .46, yBase + cabHeight * .37, cabZ],
+    materials.blue,
+    "Cabina"
+  );
+
+  // VENTANAS
+
+  addBox(
+    cab,
+    "parabrisas",
+    [wid * .72, cabHeight * .24, .025],
+    [0, yBase + cabHeight * .53, cabZ + cabLen * .475],
+    materials.glass,
+    "Cabina"
+  );
+
+  addBox(
+    cab,
+    "ventana lateral izq",
+    [.025, cabHeight * .26, cabLen * .42],
+    [-wid * .475, yBase + cabHeight * .53, cabZ],
+    materials.glass,
+    "Cabina"
+  );
+
+  addBox(
+    cab,
+    "ventana lateral der",
+    [.025, cabHeight * .26, cabLen * .42],
+    [wid * .475, yBase + cabHeight * .53, cabZ],
+    materials.glass,
+    "Cabina"
+  );
+
+  // INTERIOR
+
+  addBox(
+    cab,
+    "tablero",
+    [wid * .78, cabHeight * .055, cabLen * .10],
+    [0, yBase + cabHeight * .34, cabZ + cabLen * .24],
+    materials.black,
+    "Cabina"
+  );
+
+  addBox(
+    cab,
+    "asiento conductor",
+    [wid * .25, cabHeight * .24, cabLen * .19],
+    [-wid * .22, yBase + cabHeight * .22, cabZ - cabLen * .08],
+    materials.seat,
+    "Cabina"
+  );
+
+  addBox(
+    cab,
+    "asiento acompañante",
+    [wid * .25, cabHeight * .24, cabLen * .19],
+    [wid * .22, yBase + cabHeight * .22, cabZ - cabLen * .08],
+    materials.seat,
+    "Cabina"
+  );
+
+  const steering = new THREE.Mesh(
+    new THREE.TorusGeometry(wid * .075, .018, 8, 24),
+    materials.black
+  );
+
+  steering.position.set(
+    -wid * .22,
+    yBase + cabHeight * .42,
+    cabZ + cabLen * .19
+  );
+
+  steering.rotation.x = Math.PI / 2;
+  cab.add(steering);
+
+  // CARROCERÍA
+
+  makeGroup(
+    "Carrocería",
+    "Caja o plataforma de carga. El tipo de camión puede requerir una carrocería distinta.",
+    `${fmt(boxLen * 10)} × ${fmt(wid * 10)} × ${fmt(boxHeight * 10)} cm`,
+    1,
+    "Madera / panel",
+    [0, 0, 0],
+    [0, .75, -len * .18]
+  );
+
+  const body = partGroups.get("Carrocería");
+
+  addBox(
+    body,
+    "piso caja",
+    [wid * .95, t, boxLen],
+    [0, yBase + boxHeight * .12, zBox],
+    materials.wood,
+    "Carrocería"
+  );
+
+  addBox(
+    body,
+    "lateral izquierdo",
+    [t, boxHeight * .75, boxLen],
+    [-wid * .47, yBase + boxHeight * .49, zBox],
+    materials.wood,
+    "Carrocería"
+  );
+
+  addBox(
+    body,
+    "lateral derecho",
+    [t, boxHeight * .75, boxLen],
+    [wid * .47, yBase + boxHeight * .49, zBox],
+    materials.wood,
+    "Carrocería"
+  );
+
+  addBox(
+    body,
+    "frente caja",
+    [wid * .95, boxHeight * .75, t],
+    [0, yBase + boxHeight * .49, zBox + boxLen / 2],
+    materials.wood,
+    "Carrocería"
+  );
+
+  addBox(
+    body,
+    "puerta trasera",
+    [wid * .95, boxHeight * .75, t],
+    [0, yBase + boxHeight * .49, zBox - boxLen / 2],
+    materials.wood,
+    "Carrocería"
+  );
+
+  // RUEDAS
+
+  makeGroup(
+    "Ruedas",
+    "Ruedas de goma con rines decorativos. Verifica que las cuatro o seis ruedas queden alineadas.",
+    `Diámetro aprox. ${fmt(wheelR * 20)} cm`,
+    6,
+    "Goma / plástico",
+    [0, 0, 0],
+    [wid * .75, -.25, 0]
+  );
+
+  const wheels = partGroups.get("Ruedas");
+
+  const wheelPositions = [
+    [-wid * .52, yBase - wheelR, -len * .30],
+    [wid * .52, yBase - wheelR, -len * .30],
+    [-wid * .52, yBase - wheelR, len * .28],
+    [wid * .52, yBase - wheelR, len * .28],
+    [-wid * .52, yBase - wheelR, -len * .43],
+    [wid * .52, yBase - wheelR, -len * .43]
+  ];
+
+  wheelPositions.forEach(([x, y, z]) => {
+    const tire = new THREE.Mesh(
+      new THREE.CylinderGeometry(
+        wheelR,
+        wheelR,
+        wid * .12,
+        32
+      ),
+      materials.rubber
+    );
+
+    tire.rotation.z = Math.PI / 2;
+    tire.position.set(x, y, z);
+    tire.castShadow = true;
+    tire.userData.partKey = "Ruedas";
+    wheels.add(tire);
+
+    const rim = new THREE.Mesh(
+      new THREE.CylinderGeometry(
+        wheelR * .52,
+        wheelR * .52,
+        wid * .125,
+        24
+      ),
+      materials.silver
+    );
+
+    rim.rotation.z = Math.PI / 2;
+    rim.position.set(x, y, z);
+    rim.castShadow = true;
+    rim.userData.partKey = "Ruedas";
+    wheels.add(rim);
+  });
+
+  // EJES
+
+  makeGroup(
+    "Ejes",
+    "Barras transversales que conectan las ruedas en esta representación de maqueta.",
+    `${fmt(wid * 10)} cm de ancho`,
+    3,
+    "Varilla / madera",
+    [0, 0, 0],
+    [0, -.9, 0]
+  );
+
+  const axles = partGroups.get("Ejes");
+
+  [-len * .43, -len * .30, len * .28].forEach(z => {
+    const axle = new THREE.Mesh(
+      new THREE.CylinderGeometry(.035, .035, wid * 1.05, 16),
+      materials.metal
+    );
+
+    axle.rotation.z = Math.PI / 2;
+    axle.position.set(0, yBase - wheelR, z);
+    axle.castShadow = true;
+    axle.userData.partKey = "Ejes";
+    axles.add(axle);
+  });
+
+  // PARACHOQUES
+
+  makeGroup(
+    "Parachoques",
+    "Pieza frontal y trasera de protección decorativa.",
+    `${fmt(wid * 9.5)} × ${fmt(t * 10)} cm`,
+    2,
+    "Madera / plástico",
+    [0, 0, 0],
+    [0, .15, len * .58]
+  );
+
+  const bump = partGroups.get("Parachoques");
+
+  addBox(
+    bump,
+    "frontal",
+    [wid * 1.02, .16, .12],
+    [0, yBase + cabHeight * .05, len * .50],
+    materials.silver,
+    "Parachoques"
+  );
+
+  addBox(
+    bump,
+    "trasero",
+    [wid * 1.02, .16, .12],
+    [0, yBase + boxHeight * .08, -len * .49],
+    materials.silver,
+    "Parachoques"
+  );
+
+  // LUCES Y ESPEJOS
+
+  makeGroup(
+    "Luces y espejos",
+    "Accesorios pequeños: faros, direccionales, espejos y soportes.",
+    `Faros aprox. ${fmt(wid * .10 * 10)} cm`,
+    1,
+    "Plástico / piezas pequeñas",
+    [0, 0, 0],
+    [wid * .9, .2, len * .38]
+  );
+
+  const details = partGroups.get("Luces y espejos");
+
+  for (const x of [-wid * .27, wid * .27]) {
+    const lamp = new THREE.Mesh(
+      new THREE.BoxGeometry(wid * .12, .12, .035),
+      materials.yellow
+    );
+
+    lamp.position.set(
+      x,
+      yBase + cabHeight * .17,
+      len * .50
+    );
+
+    lamp.userData.partKey = "Luces y espejos";
+    details.add(lamp);
+
+    const mirror = new THREE.Mesh(
+      new THREE.BoxGeometry(.07, .18, .08),
+      materials.silver
+    );
+
+    mirror.position.set(
+      x * 1.75,
+      yBase + cabHeight * .48,
+      cabZ + cabLen * .12
+    );
+
+    mirror.userData.partKey = "Luces y espejos";
+    details.add(mirror);
+  }
+
+  const grille = new THREE.Mesh(
+    new THREE.BoxGeometry(
+      wid * .48,
+      cabHeight * .15,
+      .035
+    ),
+    materials.black
+  );
+
+  grille.position.set(
+    0,
+    yBase + cabHeight * .18,
+    len * .505
+  );
+
+  grille.userData.partKey = "Luces y espejos";
+  details.add(grille);
+
+  // TANQUES Y ACCESORIOS
+
+  makeGroup(
+    "Tanques y accesorios",
+    "Depósitos laterales, escalones, guardabarros y pequeños accesorios.",
+    `${fmt(len * .13 * 10)} × ${fmt(wid * .15 * 10)} cm`,
+    2,
+    "Madera / plástico",
+    [0, 0, 0],
+    [-wid * .85, .25, -len * .04]
+  );
+
+  const extras = partGroups.get("Tanques y accesorios");
+
+  for (const x of [-wid * .42, wid * .42]) {
+    const tank = new THREE.Mesh(
+      new THREE.CylinderGeometry(.12, .12, len * .13, 18),
+      materials.metal
+    );
+
+    tank.rotation.x = Math.PI / 2;
+
+    tank.position.set(
+      x,
+      yBase + cabHeight * .07,
+      cabZ - cabLen * .10
+    );
+
+    tank.userData.partKey = "Tanques y accesorios";
+    extras.add(tank);
+  }
+
+  // SOMBRA
+
+  const shadow = new THREE.Mesh(
+    new THREE.CircleGeometry(len * .72, 48),
+    new THREE.MeshBasicMaterial({
+      color: "#07111e",
+      transparent: true,
+      opacity: .28
+    })
+  );
+
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = .015;
+  truckRoot.add(shadow);
+
+  updatePartsTable();
+
+  camera.position.set(
+    len * .38,
+    hei * .75,
+    len * .72
+  );
+
+  controls.target.set(0, hei * .25, 0);
+  controls.update();
+
+  $("selectedPartLabel").textContent =
+    "Pieza seleccionada: ninguna";
+
+  showPartInfo(null);
+}
+
+// TABLA DE MEDIDAS INDIVIDUALES
+
+function updatePartsTable() {
+  const body = $("partsTable");
+  body.innerHTML = "";
+
+  const s = Number($("scale").value);
+  const L = Number($("realLength").value) / s / 10;
+  const W = Number($("realWidth").value) / s / 10;
+  const H = Number($("realHeight").value) / s / 10;
+
+  const t = Math.max(
+    .035,
+    Number($("woodThickness").value) / 1000 * s
+  );
+
+  const cabLen = L * .23;
+  const boxLen = L - cabLen * .95;
+  const wheelR = H * .105;
+  const cabH = H * .70;
+  const boxH = H * .43;
+
+  const cm = n => fmt(n * 10) + " cm";
+
+  const pieces = [
+    ["Largueros del chasis", `${cm(L*.94)} × ${cm(W*.10)} × ${cm(t)}`, 2, "Listón de madera", "Chasis"],
+    ["Travesaños del chasis", `${cm(W*.82)} × ${cm(t*1.1)} × ${cm(W*.07)}`, 4, "Listón de madera", "Chasis"],
+    ["Piso de cabina", `${cm(W*.92)} × ${cm(t)} × ${cm(cabLen*.95)}`, 1, "Contrachapado", "Cabina"],
+    ["Frente de cabina", `${cm(W*.92)} × ${cm(cabH*.63)} × ${cm(t)}`, 1, "Madera delgada", "Cabina"],
+    ["Techo de cabina", `${cm(W*.92)} × ${cm(t)} × ${cm(cabLen*.94)}`, 1, "Madera delgada", "Cabina"],
+    ["Pared trasera de cabina", `${cm(W*.92)} × ${cm(cabH*.70)} × ${cm(t)}`, 1, "Madera delgada", "Cabina"],
+    ["Laterales de cabina", `${cm(t)} × ${cm(cabH*.70)} × ${cm(cabLen*.90)}`, 2, "Madera delgada", "Cabina"],
+    ["Parabrisas", `${cm(W*.72)} × ${cm(cabH*.24)} × 0,25 cm`, 1, "Acetato transparente", "Cabina"],
+    ["Ventanas laterales", `0,25 × ${cm(cabH*.26)} × ${cm(cabLen*.42)}`, 2, "Acetato transparente", "Cabina"],
+    ["Tablero", `${cm(W*.78)} × ${cm(cabH*.055)} × ${cm(cabLen*.10)}`, 1, "Madera / plástico", "Cabina"],
+    ["Asientos", `${cm(W*.25)} × ${cm(cabH*.24)} × ${cm(cabLen*.19)}`, 2, "Madera / espuma", "Cabina"],
+    ["Piso de caja", `${cm(W*.95)} × ${cm(t)} × ${cm(boxLen)}`, 1, "Contrachapado", "Carrocería"],
+    ["Laterales de caja", `${cm(t)} × ${cm(boxH*.75)} × ${cm(boxLen)}`, 2, "Madera", "Carrocería"],
+    ["Frente y puerta trasera", `${cm(W*.95)} × ${cm(boxH*.75)} × ${cm(t)}`, 2, "Madera", "Carrocería"],
+    ["Ruedas", `Ø ${cm(wheelR*2)} × ${cm(W*.12)}`, 6, "Goma / impresión 3D", "Ruedas"],
+    ["Rines", `Ø ${cm(wheelR*1.04)} × ${cm(W*.125)}`, 6, "Plástico / impresión 3D", "Ruedas"],
+    ["Ejes", `Ø 0,35 cm × ${cm(W*1.05)}`, 3, "Varilla metálica", "Ejes"],
+    ["Parachoques", `${cm(W*1.02)} × 1,6 × 1,2 cm`, 2, "Madera / plástico", "Parachoques"],
+    ["Faros delanteros", `${cm(W*.12)} × 1,2 × 0,35 cm`, 2, "Plástico translúcido", "Luces y espejos"],
+    ["Espejos retrovisores", `0,7 × 1,8 × 0,8 cm`, 2, "Plástico / alambre", "Luces y espejos"],
+    ["Tanques laterales", `Ø 2,4 cm × ${cm(L*.13)}`, 2, "Tubo / madera", "Tanques y accesorios"]
+  ];
+
+  pieces.forEach(([name, measure, qty, material, key]) => {
+    const tr = document.createElement("tr");
+
+    tr.dataset.key = key;
+
+    tr.innerHTML = `
+      <td>${name}</td>
+      <td>${measure}</td>
+      <td>${qty}</td>
+      <td>${material}</td>
+    `;
+
+    tr.addEventListener("click", () => selectPart(key));
+
+    body.appendChild(tr);
+  });
+}
+
+// INFORMACIÓN DE PIEZAS
+
+function showPartInfo(key) {
+  const panel = $("partInfo");
+
+  if (!key) {
+    panel.innerHTML = `
+      <div class="part-chip">DETALLE DE PIEZA</div>
+      <div class="part-symbol">▧</div>
+      <h3>Selecciona un componente</h3>
+      <p>Haz clic en una pieza de la tabla o directamente sobre el camión 3D para consultar su descripción y medidas.</p>
+    `;
+    return;
+  }
+
+  const p = partDefinitions.find(x => x.key === key);
+
+  if (!p) return;
+
+  panel.innerHTML = `
+    <div class="part-chip">DETALLE DE PIEZA</div>
+    <div class="part-symbol">▧</div>
+    <h3>${p.key}</h3>
+    <p>${p.description}</p>
+
+    <div class="measure-line">
+      <span>Medida</span>
+      <b>${p.measurement}</b>
+    </div>
+
+    <div class="measure-line">
+      <span>Cantidad</span>
+      <b>${p.quantity}</b>
+    </div>
+
+    <div class="measure-line">
+      <span>Material sugerido</span>
+      <b>${p.material}</b>
+    </div>
+  `;
+}
+
+function selectPart(key) {
+  selectedPart = key;
+
+  $("selectedPartLabel").textContent =
+    "Pieza seleccionada: " + key;
+
+  document.querySelectorAll("#partsTable tr")
+    .forEach(tr => {
+      tr.classList.toggle(
+        "selected",
+        tr.dataset.key === key
+      );
+    });
+
+  showPartInfo(key);
+
+  const group = partGroups.get(key);
+
+  if (group) {
+    controls.target.copy(group.position);
+  }
+}
+
+// CÁLCULO DE MEDIDAS
+
+function calculate() {
+  const scale = Number($("scale").value);
+
+  const l = Number($("realLength").value);
+  const w = Number($("realWidth").value);
+  const h = Number($("realHeight").value);
+  const wood = Number($("woodThickness").value);
+
+  if (
+    ![scale, l, w, h, wood].every(Number.isFinite) ||
+    scale <= 0 ||
+    l <= 0 ||
+    w <= 0 ||
+    h <= 0 ||
+    wood <= 0
+  ) {
+    alert("Ingresa valores mayores que cero en todos los campos.");
+    return;
+  }
+
+  const L = l / scale;
+  const W = w / scale;
+  const H = h / scale;
+
+  $("overallLength").innerHTML =
+    `${fmt(L)} <small>cm largo</small>`;
+
+  $("overallWidth").textContent = fmt(W) + " cm";
+  $("overallHeight").textContent = fmt(H) + " cm";
+  $("overallScale").textContent = "1:" + scale;
+
+  $("stripL").textContent = fmt(L) + " cm";
+  $("stripW").textContent = fmt(W) + " cm";
+  $("stripH").textContent = fmt(H) + " cm";
+  $("stripWood").textContent = wood + " mm";
+
+  buildTruck();
+}
+
+// BOTONES
+
+function setExploded(value) {
+  exploded = value;
+
+  $("explodeBtn").classList.toggle("active", value);
+  $("assembleBtn").classList.toggle("active", !value);
+}
+
+$("explodeBtn").addEventListener(
+  "click",
+  () => setExploded(true)
+);
+
+$("assembleBtn").addEventListener(
+  "click",
+  () => setExploded(false)
+);
+
+$("calculateBtn").addEventListener(
+  "click",
+  calculate
+);
+
+$("truckType").addEventListener("change", () => {
+  const p = presets[$("truckType").value];
+
+  $("realLength").value = p[0];
+  $("realWidth").value = p[1];
+  $("realHeight").value = p[2];
+
+  calculate();
+});
+
+$("scale").addEventListener("change", calculate);
+
+$("printBtn").addEventListener(
+  "click",
+  () => window.print()
+);
+
+$("resetViewBtn").addEventListener("click", () => {
+  const len =
+    Number($("realLength").value) /
+    Number($("scale").value) / 10;
+
+  camera.position.set(
+    len * .38,
+    Math.max(4, len * .75),
+    len * .72
+  );
+
+  controls.target.set(0, 1.5, 0);
+  controls.update();
+});
+
+// SELECCIONAR PIEZAS EN EL MODELO 3D
+
+view.addEventListener("click", event => {
+  if (!renderer) return;
+
+  const rect = renderer.domElement.getBoundingClientRect();
+
+  const mouse = new THREE.Vector2(
+    (event.clientX - rect.left) / rect.width * 2 - 1,
+    -((event.clientY - rect.top) / rect.height) * 2 + 1
+  );
+
+  const raycaster = new THREE.Raycaster();
+
+  raycaster.setFromCamera(mouse, camera);
+
+  const hits = raycaster.intersectObjects(
+    truckRoot.children,
+    true
+  );
+
+  if (hits.length) {
+    let obj = hits[0].object;
+
+    while (obj && !obj.userData.partKey) {
+      obj = obj.parent;
+    }
+
+    if (obj?.userData.partKey) {
+      selectPart(obj.userData.partKey);
+    }
+  }
+});
+
+// SELECCIONAR PASOS DE CONSTRUCCIÓN
+
+document.querySelectorAll(".step").forEach(step => {
+  step.addEventListener("click", () => {
+    document.querySelectorAll(".step")
+      .forEach(s => s.classList.remove("active"));
+
+    step.classList.add("active");
+  });
+});
+
+// INICIAR PROGRAMA
+
+init3D();
+calculate();

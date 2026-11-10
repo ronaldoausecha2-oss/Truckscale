@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TRUCKSCALE 3D | Taller de camiones a escala</title>
+  <link rel="stylesheet" href="style.css">
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+
+<header class="topbar">
+  <a class="brand" href="#">
+    <span class="brand-icon">T</span>
+    TRUCK<span>SCALE</span>
+    <small>3D WORKSHOP</small>
+  </a>
+  <nav>
+    <a href="#constructor">Constructor 3D</a>
+    <a href="#piezas">Piezas y medidas</a>
+    <a href="#armado">Cómo armar</a>
+  </nav>
+</header>
+
+<main>
+  <section class="hero">
+    <div>
+      <p class="eyebrow">DISEÑA · MIDE · DESPIEZA · CONSTRUYE</p>
+      <h1>Tu camión a escala,<br><span>pieza por pieza.</span></h1>
+      <p>Configura las dimensiones, explora el modelo 3D, separa sus componentes y consulta una guía de construcción en madera.</p>
+      <a class="btn primary" href="#constructor">Abrir taller 3D ↗</a>
+    </div>
+
+    <div class="hero-mark">
+      <div class="ring"></div>
+      <div class="hero-number">3D</div>
+      <div class="hero-caption">
+        MODEL DESIGN SYSTEM<br>TRUCKSCALE / 2026
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="constructor">
+    <div class="section-title">
+      <div>
+        <p class="eyebrow">01 / CONSTRUCTOR INTERACTIVO</p>
+        <h2>Explora tu camión</h2>
+      </div>
+      <p>Arrastra para girar · usa la rueda para acercar · selecciona una pieza para ver sus medidas.</p>
+    </div>
+
+    <div class="workspace">
+      <div class="viewer-card">
+        <div class="viewer-toolbar">
+          <div><span class="live-dot"></span> VISTA 3D EN TIEMPO REAL</div>
+          <div class="view-actions">
+            <button id="assembleBtn" class="tool-btn active">Ensamblado</button>
+            <button id="explodeBtn" class="tool-btn">Separar piezas</button>
+            <button id="wheelAnimationBtn" class="tool-btn" aria-pressed="false">Animar marcha</button>
+            <button id="lightsBtn" class="tool-btn" aria-pressed="false">Encender luces</button>
+            <button id="showroomBtn" class="tool-btn" aria-pressed="false">Galería 3D</button>
+            <button id="resetViewBtn" class="tool-btn">↺</button>
+          </div>
+        </div>
+
+        <div id="threeView">
+          <div class="loading" id="loading">Preparando modelo 3D...</div>
+          <div class="showroom-hud" id="showroomHud" hidden>
+            <strong>01 / TRACTOCAMIONES</strong>
+            <span>02 / REMOLQUES · furgón, refrigerado, cisterna y cama baja</span>
+            <small>Selecciona un conjunto para abrirlo en el constructor</small>
+          </div>
+          <div class="view-hint">ARRASTRA PARA GIRAR · RUEDA PARA ZOOM · ACTIVA LUCES PARA ENCENDER FAROS Y GÁLIBO</div>
+        </div>
+
+        <div class="manual-assembly">
+          <div class="manual-assembly-heading">
+            <div>
+              <p class="eyebrow">MONTAJE MANUAL</p>
+              <h3>Arma o retira cada conjunto</h3>
+            </div>
+            <button id="reassembleAllBtn" class="outline-btn">Armar todo</button>
+          </div>
+          <p>Retira las piezas en el orden que prefieras. Pulsa de nuevo “Instalar” para devolver cada conjunto a su sitio.</p>
+          <div id="manualParts" class="manual-parts"></div>
+        </div>
+
+        <div class="viewer-footer">
+          <span id="selectedPartLabel">Pieza seleccionada: ninguna</span>
+          <span id="assemblyStatus">MODELO ENSAMBLADO</span>
+        </div>
+      </div>
+
+      <aside class="control-panel">
+        <p class="eyebrow">CONFIGURACIÓN DEL MODELO</p>
+        <h3>Modelo y dimensiones</h3>
+        <p class="model-caption" id="modelCaption">Kenworth T800 + plataforma / plancha · dimensiones de referencia editables</p>
+
+        <label for="truckType">Marca y modelo del camión</label>
+        <select id="truckType">
+          <option value="kenworth-t800">Kenworth T800</option>
+        </select>
+
+        <label for="trailerType">Carrocería o remolque</label>
+        <select id="trailerType">
+          <option value="flatbed">Plataforma / plancha</option>
+        </select>
+
+        <label for="scale">Escala</label>
+        <select id="scale">
+          <option value="12">1:12</option>
+          <option value="16">1:16</option>
+          <option value="18">1:18</option>
+          <option value="24" selected>1:24</option>
+          <option value="32">1:32</option>
+          <option value="43">1:43</option>
+        </select>
+
+        <div class="input-grid">
+          <div>
+            <label for="realLength">Largo del conjunto (cm)</label>
+            <input id="realLength" type="number" min="1" value="850">
+          </div>
+          <div>
+            <label for="realWidth">Ancho real (cm)</label>
+            <input id="realWidth" type="number" min="1" value="250">
+          </div>
+          <div>
+            <label for="realHeight">Alto real (cm)</label>
+            <input id="realHeight" type="number" min="1" value="330">
+          </div>
+          <div>
+            <label for="woodThickness">Madera (mm)</label>
+            <input id="woodThickness" type="number" min="1" max="30" value="3">
+          </div>
+        </div>
+
+        <button class="btn primary wide" id="calculateBtn">
+          Actualizar medidas y modelo
+        </button>
+        <div class="scale-summary">
+          <span>MEDIDAS GENERALES DEL MODELO</span>
+          <div class="big-measure" id="overallLength">
+            35,42 <small>cm largo</small>
+          </div>
+          <div class="summary-row">
+            <span>Ancho</span>
+            <b id="overallWidth">10,42 cm</b>
+          </div>
+          <div class="summary-row">
+            <span>Alto</span>
+            <b id="overallHeight">13,75 cm</b>
+          </div>
+          <div class="summary-row">
+            <span>Escala</span>
+            <b id="overallScale">1:24</b>
+          </div>
+        </div>
+
+        <p class="fine-print">
+          Medidas de referencia editables; pueden cambiar según año, cabina, ejes, versión y normativa. Para dimensiones oficiales, comprueba la ficha técnica exacta del vehículo.
+        </p>
+      </aside>
+    </div>
+  </section>
+
+  <section class="section parts-section" id="piezas">
+    <div class="section-title">
+      <div>
+        <p class="eyebrow">02 / DESPIECE TÉCNICO</p>
+        <h2>Medidas de todas las piezas</h2>
+      </div>
+      <p>Las medidas se actualizan al cambiar la escala o las dimensiones. Selecciona una fila para localizar la pieza en el modelo.</p>
+    </div>
+
+    <div class="dimension-strip">
+      <div><span>LARGO TOTAL</span><b id="stripL">35,42 cm</b></div>
+      <div><span>ANCHO TOTAL</span><b id="stripW">10,42 cm</b></div>
+      <div><span>ALTO TOTAL</span><b id="stripH">13,75 cm</b></div>
+      <div><span>GROSOR MADERA</span><b id="stripWood">3 mm</b></div>
+    </div>
+
+    <div class="parts-layout">
+      <div class="table-card">
+        <div class="table-head">
+          <h3>Lista de corte y componentes</h3>
+          <button id="printBtn" class="outline-btn">Imprimir / guardar PDF</button>
+        </div>
+
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Componente</th>
+                <th>Medida (largo × ancho × alto)</th>
+                <th>Cant.</th>
+                <th>Material / detalle</th>
+              </tr>
+            </thead>
+            <tbody id="partsTable"></tbody>
+          </table>
+        </div>
+
+        <p class="table-note">
+          “Ø” indica diámetro. Las piezas curvas o redondas requieren plantilla; las dimensiones son aproximadas para una maqueta conceptual.
+        </p>
+      </div>
+
+      <div class="part-info" id="partInfo">
+        <div class="part-chip">DETALLE DE PIEZA</div>
+        <div class="part-symbol">▧</div>
+        <h3>Selecciona un componente</h3>
+        <p>Haz clic en una pieza de la tabla o directamente sobre el camión 3D para consultar su descripción y medidas.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section assembly-section" id="armado">
+    <div class="section-title">
+      <div>
+        <p class="eyebrow">03 / GUÍA DE CONSTRUCCIÓN</p>
+        <h2>Cómo armar el camión</h2>
+      </div>
+      <p>Sigue el orden sugerido y verifica las medidas antes de pegar definitivamente las piezas.</p>
+    </div>
+
+    <div class="assembly-layout">
+      <div class="steps" id="steps">
+        <article class="step active">
+          <span>01</span>
+          <div>
+            <h3>Preparar y marcar las piezas</h3>
+            <p>Imprime o copia las medidas. Marca cada pieza en la madera con regla y escuadra. Comprueba dos veces las dimensiones antes de cortar.</p>
+          </div>
+        </article>
+
+        <article class="step">
+          <span>02</span>
+          <div>
+            <h3>Construir el chasis</h3>
+            <p>Corta los dos largueros y los travesaños. Presenta las piezas en seco, revisa que queden paralelas y únelas manteniendo la estructura recta.</p>
+          </div>
+        </article>
+
+        <article class="step">
+          <span>03</span>
+          <div>
+            <h3>Armar e instalar los ejes y ruedas</h3>
+            <p>Marca los puntos de los ejes de forma simétrica. Comprueba que las ruedas queden alineadas y que el modelo apoye de manera estable.</p>
+          </div>
+        </article>
+
+        <article class="step">
+          <span>04</span>
+          <div>
+            <h3>Construir la cabina</h3>
+            <p>Forma piso, frente, techo y laterales. Añade tablero, asientos, volante y paneles interiores antes de cerrar las zonas de difícil acceso.</p>
+          </div>
+        </article>
+
+        <article class="step">
+          <span>05</span>
+          <div>
+            <h3>Montar la carrocería</h3>
+            <p>Construye el remolque elegido —plataforma, furgón, refrigerado, cisterna, volco u otro— y comprueba su ancho, largo y altura con la tabla de piezas.</p>
+          </div>
+        </article>
+
+        <article class="step">
+          <span>06</span>
+          <div>
+            <h3>Acoplar el remolque</h3>
+            <p>Refuerza la quinta rueda y el perno de enganche. Presenta el remolque centrado, revisa que no choque con la cabina al girar y coloca las patas de apoyo.</p>
+          </div>
+        </article>
+
+        <article class="step">
+          <span>07</span>
+          <div>
+            <h3>Agregar detalles y acabado</h3>
+            <p>Coloca espejos, parrilla, luces, manijas y accesorios. Lija suavemente, retira el polvo y aplica imprimación y pintura en capas finas.</p>
+          </div>
+        </article>
+      </div>
+
+      <aside class="assembly-tip">
+        <span class="tip-icon">✦</span>
+        <h3>Consejo del taller</h3>
+        <p>Haz primero una maqueta de prueba en cartón. Así podrás comprobar proporciones y encajes sin desperdiciar madera.</p>
+        <div class="safety-note">
+          <b>Trabajo seguro</b><br>
+          Usa herramientas adecuadas para tu edad y experiencia, trabaja con supervisión adulta cuando sea necesario y sigue las instrucciones de seguridad de cada herramienta y adhesivo.
+        </div>
+      </aside>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="brand">
+    <span class="brand-icon">T</span>
+    TRUCK<span>SCALE</span>
+  </div>
+  <p>Diseño y construcción de camiones a escala en madera.</p>
+  <small>Planos conceptuales: valida las medidas y tolerancias con una prueba física.</small>
+</footer>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
