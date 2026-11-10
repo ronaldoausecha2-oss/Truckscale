@@ -23,10 +23,32 @@ html {
 
 body {
   margin: 0;
-  background: var(--paper);
+  background:
+    radial-gradient(ellipse at 8% 18%, rgba(56, 189, 248, .08), transparent 28rem),
+    radial-gradient(ellipse at 92% 58%, rgba(37, 99, 235, .05), transparent 32rem),
+    var(--paper);
   color: var(--ink);
   font-family: Inter, Arial, sans-serif;
   line-height: 1.55;
+}
+
+.skip-link {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 30;
+  padding: 10px 14px;
+  transform: translateY(-150%);
+  background: #fff;
+  color: var(--ink);
+  border: 2px solid var(--blue);
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
 }
 
 a {
@@ -1002,6 +1024,214 @@ footer small {
   .input-grid {
     gap: 2px 9px;
   }
+}
+
+/* Identidad visual industrial */
+body {
+  --surface: #fffdf8;
+  background:
+    radial-gradient(ellipse at 5% 12%, rgba(217, 119, 6, .09), transparent 30rem),
+    #f4f1e9;
+  color: #242a28;
+}
+
+.topbar,
+footer {
+  background: #202725;
+}
+
+.topbar {
+  border-bottom: 3px solid #d97706;
+}
+
+.brand > span:not(.brand-icon) {
+  color: #f5a623;
+}
+
+.brand-icon,
+.primary {
+  background: #b85e08;
+}
+
+.primary:hover {
+  background: #b85e08;
+}
+
+.hero {
+  background:
+    radial-gradient(circle at 84% 38%, #55401f, transparent 31%),
+    linear-gradient(112deg, #202725, #303a35);
+}
+
+.hero .eyebrow,
+.hero-number,
+.tip-icon,
+.safety-note b {
+  color: #f5b544;
+}
+
+.hero-number {
+  text-shadow: 0 0 35px #f5a62340;
+}
+
+.hero-mark {
+  border-color: #8a7047;
+  background: #302f2880;
+}
+
+.ring {
+  border-color: #9c8050;
+}
+
+.hero-caption {
+  color: #d6c6a4;
+}
+
+.section-title h2 {
+  color: #242a28;
+}
+
+.viewer-card,
+.control-panel,
+.table-card,
+.part-info,
+.assembly-tip,
+.step {
+  background: var(--surface);
+  border-color: #e3ddcf;
+  border-radius: 12px;
+  box-shadow: 0 12px 32px rgba(48, 41, 28, .07);
+}
+
+.tool-btn.active,
+.tool-btn:hover {
+  background: #fff2d6;
+  border-color: #e7b45b;
+  color: #8a4c08;
+}
+
+.tool-btn:focus-visible,
+.outline-btn:focus-visible,
+.btn:focus-visible,
+.manual-part button:focus-visible,
+.topbar a:focus-visible,
+nav a:focus-visible {
+  outline: 3px solid #e7a52f;
+  outline-offset: 3px;
+}
+
+#threeView {
+  background: radial-gradient(circle at 50% 43%, #35443e, #1d2724 75%);
+}
+
+.showroom-hud {
+  border-color: #f5b54470;
+  background: #202725e8;
+}
+
+.manual-assembly {
+  background: #faf8f2;
+  border-color: #e8e1d3;
+}
+
+.manual-part {
+  border-color: #e5ddce;
+  background: #fffdf8;
+}
+
+.manual-part button,
+.manual-part button:hover {
+  background: #fff0d2;
+  color: #8a4c08;
+}
+
+.manual-part.removed {
+  border-color: #e8c98f;
+  background: #fff9ec;
+}
+
+.control-panel input:focus,
+.control-panel select:focus {
+  border-color: #d97706;
+  box-shadow: 0 0 0 3px #d9770618;
+}
+
+.scale-summary {
+  background: #f7f0e2;
+}
+
+.big-measure,
+.outline-btn,
+tbody td:nth-child(2),
+.part-info .measure-line b {
+  color: #a85608;
+}
+
+.summary-row {
+  border-color: #e8ddc8;
+}
+
+.summary-row b {
+  color: #59401f;
+}
+
+.parts-section {
+  background: #ebe7dc;
+}
+
+.dimension-strip,
+.assembly-tip {
+  background: #303a35;
+}
+
+.dimension-strip span {
+  color: #d1bd98;
+}
+
+.dimension-strip b {
+  color: #ffe0a3;
+}
+
+.outline-btn {
+  border-color: #e0bd82;
+}
+
+thead {
+  background: #f5f0e5;
+  color: #665a44;
+}
+
+tbody tr:hover,
+tbody tr.selected {
+  background: #fff4dc;
+}
+
+.part-chip {
+  background: #fff0d2;
+  color: #9c570c;
+}
+
+.part-symbol,
+.step > span {
+  color: #d79a36;
+}
+
+.step.active {
+  border-color: #e2b45f;
+  background: #fffaf0;
+}
+
+.assembly-tip {
+  color: #fffdf8;
+}
+
+.assembly-tip p,
+.safety-note {
+  color: #d9ded6;
+}
+
+.safety-note {
+  border-color: #ffffff30;
 }
 
 /* Impresión de planos */
